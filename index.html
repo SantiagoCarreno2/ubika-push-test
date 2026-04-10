@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>UBIKA — Prueba Push</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #f0f4f8;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      background: white;
+      border-radius: 16px;
+      padding: 32px 24px;
+      max-width: 420px;
+      width: 100%;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.10);
+      text-align: center;
+    }
+    .logo { font-size: 48px; margin-bottom: 12px; }
+    h1 { font-size: 22px; color: #1a5fa8; margin-bottom: 6px; }
+    .sub { font-size: 13px; color: #666; margin-bottom: 28px; }
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-bottom: 12px;
+      transition: opacity 0.2s;
+    }
+    .btn:active { opacity: 0.8; }
+    .btn-primary { background: #1a5fa8; color: white; }
+    .btn-green   { background: #16a34a; color: white; }
+    .btn-red     { background: #dc2626; color: white; }
+    .btn:disabled { background: #ccc; cursor: not-allowed; }
+    .status {
+      margin-top: 20px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      display: none;
+    }
+    .status.ok  { background: #dcfce7; color: #166534; display: block; }
+    .status.err { background: #fee2e2; color: #991b1b; display: block; }
+    .status.inf { background: #dbeafe; color: #1e40af; display: block; }
+    .token-box {
+      margin-top: 16px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px;
+      font-size: 10px;
+      word-break: break-all;
+      color: #475569;
+      text-align: left;
+      display: none;
+    }
+    .divider {
+      border: none;
+      border-top: 1px solid #e2e8f0;
+      margin: 20px 0;
+    }
+    .section-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #94a3b8;
+      margin-bottom: 12px;
+    }
+  </style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">🔔</div>
+  <h1>UBIKA Push Test</h1>
+  <p class="sub">Prueba de notificaciones push para cuadrilleros</p>
+
+  <!-- PASO 1: Suscribir -->
+  <div class="section-title">Paso 1 — Activar notificaciones</div>
+  <button class="btn btn-primary" id="btnSuscribir" onclick="suscribir()">
+    🔔 Activar Notificaciones
+  </button>
+
+  <hr class="divider">
+
+  <!-- PASO 2: Probar notificación local -->
+  <div class="section-title">Paso 2 — Probar localmente</div>
+  <button class="btn btn-green" id="btnLocal" onclick="probarLocal()" disabled>
+    ⚡ Enviar notificación de prueba
+  </button>
+
+  <hr class="divider">
+
+  <!-- PASO 3: Copiar token -->
+  <div class="section-title">Paso 3 — Token para Apps Script</div>
+  <button class="btn btn-red" id="btnCopiar" onclick="copiarToken()" disabled>
+    📋 Copiar mi token
+  </button>
+
+  <div class="status" id="status"></div>
+  <div class="token-box" id="tokenBox"></div>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-messaging-compat.js"></script>
+
+<script>
+  // ── Configuración Firebase ──────────────────────────────────
+  var FIREBASE_CONFIG = {
+    apiKey:            "AIzaSyCcaSobXyW6exyuQBj7d2V5UllTMZ-U-3k",
+    authDomain:        "ubika-notificaciones.firebaseapp.com",
+    projectId:         "ubika-notificaciones",
+    storageBucket:     "ubika-notificaciones.firebasestorage.app",
+    messagingSenderId: "610393604402",
+    appId:             "1:610393604402:web:d95cb07f4bf9389412d72b"
+  };
+
+  var VAPID_KEY = "BFX6_KZearMdKuggQCrHelftApcF5ByW0j365hf3BFRS7m7jJvkM64rla2TSEG-ySY-3EHAWjttl9z_pngW_hmU";
+
+  // ── Init ────────────────────────────────────────────────────
+  firebase.initializeApp(FIREBASE_CONFIG);
+  var messaging = firebase.messaging();
+
+  var tokenActual = null;
+
+  function mostrarStatus(msg, tipo) {
+    var el = document.getElementById('status');
+    el.textContent = msg;
+    el.className = 'status ' + tipo;
+  }
+
+  // ── Suscribir ───────────────────────────────────────────────
+  async function suscribir() {
+    var btn = document.getElementById('btnSuscribir');
+    btn.disabled = true;
+    btn.textContent = '⏳ Activando...';
+    mostrarStatus('Registrando service worker...', 'inf');
+
+    try {
+      // Registrar service worker desde GitHub Pages
+      var swReg = await navigator.serviceWorker.register(
+        'https://santiagocarreno2.github.io/ubika-push-test/sw.js',
+        { scope: '/ubika-push-test/' }
+      );
+
+      // Pedir permiso
+      var permiso = await Notification.requestPermission();
+      if (permiso !== 'granted') {
+        mostrarStatus('❌ Permiso denegado. Ve a Ajustes del navegador y permite notificaciones.', 'err');
+        btn.disabled = false;
+        btn.textContent = '🔔 Activar Notificaciones';
+        return;
+      }
+
+      // Obtener token FCM
+      var token = await messaging.getToken({
+        vapidKey:            VAPID_KEY,
+        serviceWorkerRegistration: swReg
+      });
+
+      if (!token) {
+        mostrarStatus('❌ No se pudo obtener el token. Intenta de nuevo.', 'err');
+        btn.disabled = false;
+        btn.textContent = '🔔 Activar Notificaciones';
+        return;
+      }
+
+      tokenActual = token;
+
+      mostrarStatus('✅ Notificaciones activadas correctamente.', 'ok');
+      btn.textContent = '✅ Activado';
+
+      document.getElementById('btnLocal').disabled  = false;
+      document.getElementById('btnCopiar').disabled = false;
+
+      var box = document.getElementById('tokenBox');
+      box.textContent = token;
+      box.style.display = 'block';
+
+    } catch(e) {
+      mostrarStatus('❌ Error: ' + e.message, 'err');
+      btn.disabled = false;
+      btn.textContent = '🔔 Activar Notificaciones';
+    }
+  }
+
+  // ── Prueba local (sin servidor) ─────────────────────────────
+  function probarLocal() {
+    if (Notification.permission !== 'granted') {
+      mostrarStatus('Primero activa las notificaciones.', 'err');
+      return;
+    }
+    new Notification('UBIKA — Prueba ✅', {
+      body:    '¡Funciona! Esta notificación llegará igual cuando el teléfono esté bloqueado.',
+      vibrate: [300, 100, 300, 100, 300],
+      requireInteraction: true,
+      tag:     'ubika-test'
+    });
+    mostrarStatus('📣 Notificación enviada — revisa la barra de notificaciones.', 'inf');
+  }
+
+  // ── Copiar token ─────────────────────────────────────────────
+  function copiarToken() {
+    if (!tokenActual) return;
+    navigator.clipboard.writeText(tokenActual)
+      .then(function() { mostrarStatus('📋 Token copiado al portapapeles.', 'ok'); })
+      .catch(function() {
+        // Fallback para móviles
+        var ta = document.createElement('textarea');
+        ta.value = tokenActual;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        mostrarStatus('📋 Token copiado.', 'ok');
+      });
+  }
+
+  // ── Mensaje en foreground ───────────────────────────────────
+  messaging.onMessage(function(payload) {
+    var data = payload.notification || {};
+    new Notification(data.title || 'UBIKA', {
+      body:    data.body || '',
+      vibrate: [300, 100, 300],
+      requireInteraction: true,
+      tag:     'ubika-fg'
+    });
+  });
+</script>
+</body>
+</html>
