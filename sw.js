@@ -23,8 +23,7 @@ self.addEventListener('push', function(event) {
     // Vibración larga y repetida — mucho más agresiva que WhatsApp
     vibrate:            [500, 200, 500, 200, 500, 200, 500, 200, 500],
     requireInteraction: true,   // no desaparece sola — el usuario debe cerrarla
-    tag:                'ubika-alarma',
-    renotify:           true,   // vuelve a sonar aunque ya haya una notificación del mismo tag
+    tag:                'ubika-' + Date.now(),
     silent:             false,
     data:               { url: self.location.origin }
   };
